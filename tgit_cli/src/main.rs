@@ -4,7 +4,7 @@ use std::io::Write;
 use std::collections::HashSet;
 use tgit_core::SafetensorFile;
 use tgit_core::ModelArchiver;
-use tgit_core::utils::{get_store_path, LockFile};
+use tgit_core::utils::{get_store_path, LockFile, find_tgit_root};
 use tgit_core::remote::RemoteClient;
 
 use clap::{Parser, Subcommand};
@@ -57,6 +57,34 @@ enum RemoteCommand {
     Remove {
         name: String,
     },
+}
+
+fn scan_manifests(dir: &std::path::Path, hashes: &mut HashSet<String>) -> std::io::Result<()> {
+    if dir.is_dir() {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                 let name = path.file_name().unwrap_or_default().to_string_lossy();
+                 // Ignore common build/hidden dirs to avoid scanning too much or loops
+                 if name == ".git" || name == ".tgit" || name == "target" || name == "node_modules" {
+                     continue;
+                 }
+                scan_manifests(&path, hashes)?;
+            } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with(".tgit.json") {
+                     let f = File::open(&path)?;
+                     let reader = std::io::BufReader::new(f);
+                     if let Ok(manifest) = serde_json::from_reader::<_, tgit_core::storage::TGitManifest>(reader) {
+                         for tensor in manifest.tensors.values() {
+                             hashes.insert(tensor.hash.clone());
+                         }
+                     }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[tokio::main]
@@ -199,23 +227,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 1. Collect all referenced hashes
             let mut referenced_hashes = HashSet::new();
-            let paths = std::fs::read_dir(".")?;
-            for entry in paths {
-                let entry = entry?;
-                let path = entry.path();
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.ends_with(".tgit.json") {
-                        let f = File::open(&path)?;
-                        let reader = std::io::BufReader::new(f);
-                        if let Ok(manifest) = serde_json::from_reader::<_, tgit_core::storage::TGitManifest>(reader) {
-                            for tensor in manifest.tensors.values() {
-                                referenced_hashes.insert(tensor.hash.clone());
-                            }
-                        }
-                    }
-                }
-            }
-            println!("Found {} referenced blobs in current directory.", referenced_hashes.len());
+            
+            // Find root to scan from
+            let scan_root = find_tgit_root().unwrap_or_else(|| PathBuf::from("."));
+            println!("Scanning for manifests starting from: {}", scan_root.display());
+            
+            scan_manifests(&scan_root, &mut referenced_hashes)?;
+            
+            println!("Found {} referenced blobs in the repository.", referenced_hashes.len());
 
             // 2. Scan blobs and delete unreferenced
             let mut deleted_count = 0;
@@ -240,9 +259,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             
             println!("GC Complete. Deleted: {}, Kept: {}", deleted_count, kept_count);
-            if deleted_count > 0 {
-                println!("Warning: Blobs were deleted based only on manifests in the CURRENT directory. If other projects share this store, you may have broken them.");
-            }
         }
 
     // Remote management commands

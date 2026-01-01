@@ -4,7 +4,7 @@ use s3::bucket::Bucket;
 use s3::creds::Credentials;
 use s3::region::Region;
 use std::error::Error;
-use tokio::{fs::File, io::AsyncWriteExt};
+use tokio::fs::File;
 use std::str::FromStr;
 use futures::stream::{self, StreamExt};
 
@@ -83,11 +83,9 @@ impl RemoteClient {
                 if !blob_path.exists() {
                     let remote_path = format!("blobs/{}", tensor.hash);
                     
-                    // Fallback to non-streaming download to avoid trait issues with ResponseDataStream
-                    // TODO: Investigate get_object_to_writer or Stream impl for ResponseDataStream
-                    let response = self.bucket.get_object(&remote_path).await?;
+                    let mut stream = self.bucket.get_object_stream(&remote_path).await?;
                     let mut file = File::create(&blob_path).await?;
-                    file.write_all(response.bytes()).await?;
+                    tokio::io::copy(&mut stream, &mut file).await?;
                     
                     println!("Downloaded blob {}", tensor.hash);
                 }
