@@ -1,6 +1,26 @@
 use crate::errors::{VektError, Result};
 use crate::blobs;
+use regex::Regex;
 use std::path::Path;
+use std::sync::OnceLock;
+
+// Compile regexes once and reuse them
+static TENSOR_NAME_REGEX: OnceLock<Regex> = OnceLock::new();
+static S3_BUCKET_REGEX: OnceLock<Regex> = OnceLock::new();
+
+fn get_tensor_name_regex() -> &'static Regex {
+    TENSOR_NAME_REGEX.get_or_init(|| {
+        Regex::new(r"^[a-zA-Z0-9._/-]+$").unwrap()
+    })
+}
+
+fn get_s3_bucket_regex() -> &'static Regex {
+    S3_BUCKET_REGEX.get_or_init(|| {
+        // S3 bucket naming rules: lowercase letters, numbers, hyphens, dots
+        // Must be 1-63 characters
+        Regex::new(r"^[a-z0-9][a-z0-9.-]{0,61}[a-z0-9]$").unwrap()
+    })
+}
 
 /// Validates that a path doesn't contain path traversal attempts
 pub fn validate_path_safe(path: &str) -> Result<()> {
@@ -18,8 +38,8 @@ pub fn validate_tensor_name(name: &str) -> Result<()> {
         ));
     }
     
-    // Allow alphanumeric, dots, underscores, hyphens, and forward slashes
-    if !name.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '_' || c == '-' || c == '/') {
+    // Use regex for cleaner validation
+    if !get_tensor_name_regex().is_match(name) {
         return Err(VektError::InvalidTensorName(
             format!("Invalid characters in tensor name: {}", name)
         ));
@@ -38,16 +58,13 @@ pub fn validate_s3_url(url: &str) -> Result<String> {
     
     let bucket_name = url.trim_start_matches("s3://").trim_end_matches('/');
     
-    if bucket_name.is_empty() || bucket_name.len() > 63 {
+    // Use regex for cleaner S3 bucket name validation
+    if !get_s3_bucket_regex().is_match(bucket_name) {
         return Err(VektError::InvalidRemoteUrl(
-            "Bucket name must be between 1 and 63 characters".to_string()
-        ));
-    }
-    
-    // Validate bucket name (simplified S3 bucket naming rules)
-    if !bucket_name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.') {
-        return Err(VektError::InvalidRemoteUrl(
-            "Bucket name can only contain lowercase letters, numbers, hyphens, and dots".to_string()
+            format!(
+                "Invalid S3 bucket name: '{}'. Must be 1-63 characters, lowercase letters, numbers, hyphens, and dots only",
+                bucket_name
+            )
         ));
     }
     

@@ -26,6 +26,8 @@ indexmap = { version = "2.1", features = ["serde"] }
 futures = "0.3.31"
 # Compression
 zstd = "0.13"
+# Regular expressions for validation
+regex = "1.10"
 # For testing
 rand = { version = "0.8", optional = true }
 
