@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
-use crate::utils::get_store_path;
+use crate::blobs;
 use indexmap::IndexMap;
-use crate::utils::find_tgit_root;
+use crate::utils::{find_vekt_root, ensure_vekt_dir};
 
 // Metadata for a single tensor in raw format in safetensor file
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,7 +34,7 @@ pub struct ManifestTensor {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TGitManifest {
+pub struct VektManifest {
     // Fix Issue #1: Deterministic serialization for Git diffs
     pub tensors: BTreeMap<String, ManifestTensor>,
     pub version: String,
@@ -44,15 +44,15 @@ pub struct TGitManifest {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct TGitConfig {
+pub struct VektConfig {
     pub remotes: HashMap<String, String>,
 }
 
 
 
-impl TGitManifest {
+impl VektManifest {
     pub fn print_summary(&self) {
-        println!("TGit Manifest Summary:");
+        println!("vekt Manifest Summary:");
         println!("Version: {}", self.version);
         println!("Total Tensors: {}", self.tensors.len());
         println!("Total Size: {} bytes", self.total_size);
@@ -70,8 +70,6 @@ impl TGitManifest {
     }
 
     pub fn restore(&self, output_path: &std::path::Path, filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-        let store_path = get_store_path();
-
         let file = File::create(output_path)?;
         let mut writer = std::io::BufWriter::new(file);
 
@@ -158,7 +156,8 @@ impl TGitManifest {
                 current_write_pos += padding;
             }
 
-            let blob_path = store_path.join(&tensor.hash);
+            // Use centralized blob path resolution
+            let blob_path = blobs::get_blob_path(&tensor.hash);
             let mut blob_file = File::open(blob_path)?;
             let bytes_copied = std::io::copy(&mut blob_file, &mut writer)?;
             
@@ -172,12 +171,12 @@ impl TGitManifest {
     }
 }
 
-impl TGitConfig {
+impl VektConfig {
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let root = find_tgit_root().unwrap_or_else(|| std::env::current_dir().unwrap());
-        let path = root.join(".tgit").join("config.json");
+        let root = find_vekt_root().unwrap_or_else(|| std::env::current_dir().unwrap());
+        let path = root.join(".vekt").join("config.json");
         if !path.exists() {
-            return Ok(TGitConfig::default());
+            return Ok(VektConfig::default());
         }
         let file = File::open(path)?;
         let reader = std::io::BufReader::new(file);
@@ -186,10 +185,8 @@ impl TGitConfig {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let dir = std::env::current_dir()?.join(".tgit");
-        if !dir.exists() {
-            std::fs::create_dir_all(&dir)?;
-        }
+        let dir = std::env::current_dir()?.join(".vekt");
+        ensure_vekt_dir(&dir)?;
         let file = File::create(dir.join("config.json"))?;
         serde_json::to_writer_pretty(file, self)?;
         Ok(())

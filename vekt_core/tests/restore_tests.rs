@@ -3,22 +3,13 @@ use std::fs::File;
 use std::io::{Read, Write};
 use indexmap::IndexMap;
 
-use tgit_core::{SafetensorFile, ModelArchiver};
-use tgit_core::storage::{TGitManifest, ManifestTensor};
-use tgit_core::utils::get_store_path;
+use vekt_core::{SafetensorFile, ModelArchiver};
+use vekt_core::storage::{VektManifest, ManifestTensor};
+use vekt_core::blobs;
 
 // Helper to create a dummy blob
 fn create_blob(data: &[u8]) -> String {
-    let hash = blake3::hash(data);
-    let hash_hex = hex::encode(hash.as_bytes());
-    let store_path = get_store_path();
-    std::fs::create_dir_all(&store_path).unwrap();
-    let blob_path = store_path.join(&hash_hex);
-    if !blob_path.exists() {
-        let mut f = File::create(blob_path).unwrap();
-        f.write_all(data).unwrap();
-    }
-    hash_hex
+    blobs::write_blob_atomic(data).unwrap()
 }
 
 #[test]
@@ -78,7 +69,7 @@ fn test_shared_weights_deduplication() {
         extra: IndexMap::new(),
     });
 
-    let manifest = TGitManifest {
+    let manifest = VektManifest {
         tensors,
         version: "1.0".to_string(),
         total_size: 4, 
@@ -102,7 +93,7 @@ fn test_shared_weights_deduplication() {
     assert_eq!(offset_a, offset_b, "Offsets for shared weights must be identical");
 
     std::fs::remove_file(output_path).unwrap();
-    std::fs::remove_file(get_store_path().join(&hash)).ok();
+    std::fs::remove_file(blobs::get_blob_path(&hash)).ok();
 }
 
 #[test]
@@ -130,7 +121,7 @@ fn test_alignment_padding() {
         extra: IndexMap::new(),
     });
 
-    let manifest = TGitManifest {
+    let manifest = VektManifest {
         tensors,
         version: "1.0".to_string(),
         total_size: 2,
@@ -154,8 +145,8 @@ fn test_alignment_padding() {
     assert_eq!(data_section[8], 0xDD);
 
     std::fs::remove_file(output_path).unwrap();
-    std::fs::remove_file(get_store_path().join(&hash_a)).ok();
-    std::fs::remove_file(get_store_path().join(&hash_b)).ok();
+    std::fs::remove_file(blobs::get_blob_path(&hash_a)).ok();
+    std::fs::remove_file(blobs::get_blob_path(&hash_b)).ok();
 }
 
 #[test]
@@ -176,7 +167,7 @@ fn test_extra_metadata_preservation() {
         extra,
     });
 
-    let manifest = TGitManifest {
+    let manifest = VektManifest {
         tensors,
         version: "1.0".to_string(),
         total_size: 1,
@@ -195,6 +186,6 @@ fn test_extra_metadata_preservation() {
     assert!(header_str.contains("\"quantization\":\"int8\""));
     
     std::fs::remove_file(output_path).unwrap();
-    std::fs::remove_file(get_store_path().join(&hash)).ok();
+    std::fs::remove_file(blobs::get_blob_path(&hash)).ok();
 }
 

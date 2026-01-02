@@ -1,5 +1,5 @@
-use crate::storage::TGitManifest;
-use crate::utils::get_store_path;
+use crate::storage::VektManifest;
+use crate::blobs;
 use s3::bucket::Bucket;
 use s3::creds::Credentials;
 use s3::region::Region;
@@ -25,12 +25,12 @@ impl RemoteClient {
         Ok(Self { bucket })
     }
 
-    pub async fn push(&self, manifest: &TGitManifest, manifest_name: &str) -> Result<(), Box<dyn Error>> {
+    pub async fn push(&self, manifest: &VektManifest, manifest_name: &str) -> Result<(), Box<dyn Error>> {
         println!("Pushing {} blobs...", manifest.tensors.len());
 
         let tasks = stream::iter(manifest.tensors.values())
             .map(|tensor| async move {
-                let blob_path = get_store_path().join(&tensor.hash);
+                let blob_path = blobs::get_blob_path(&tensor.hash);
                 let remote_path = format!("blobs/{}", tensor.hash);
                 
                 match self.bucket.head_object(&remote_path).await {
@@ -67,19 +67,16 @@ impl RemoteClient {
         Ok(())
     }
 
-    pub async fn pull(&self, manifest_name: &str) -> Result<TGitManifest, Box<dyn Error>> {
+    pub async fn pull(&self, manifest_name: &str) -> Result<VektManifest, Box<dyn Error>> {
         let response_data = self.bucket.get_object(&format!("manifests/{}", manifest_name)).await?;
         let bytes = response_data.bytes(); 
-        let manifest: TGitManifest = serde_json::from_slice(bytes)?;
-
-        let store_path = get_store_path();
-        std::fs::create_dir_all(&store_path)?;
+        let manifest: VektManifest = serde_json::from_slice(bytes)?;
 
         println!("Pulling {} blobs...", manifest.tensors.len());
 
         let tasks = stream::iter(manifest.tensors.values())
             .map(|tensor| async move {
-                let blob_path = get_store_path().join(&tensor.hash);
+                let blob_path = blobs::get_blob_path(&tensor.hash);
                 if !blob_path.exists() {
                     let remote_path = format!("blobs/{}", tensor.hash);
                     

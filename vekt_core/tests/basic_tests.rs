@@ -4,8 +4,8 @@ use memmap2::MmapOptions;
 use indexmap::IndexMap;
 
 // Import from the public API of the crate
-use tgit_core::{SafetensorFile, ModelArchiver};
-use tgit_core::storage::{RawHeader, RawTensorMetaData};
+use vekt_core::{SafetensorFile, ModelArchiver};
+use vekt_core::storage::{RawHeader, RawTensorMetaData};
 
 #[test]
 fn test_safetensor_new() {

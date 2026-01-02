@@ -5,20 +5,17 @@ pub mod errors;
 pub mod validation;
 pub mod compression;
 pub mod diff;
+pub mod blobs;
 
 use std::collections::BTreeMap;
-use std::fs::{self, File};
 use rayon::prelude::*;
-use blake3;
-use hex;
 use memmap2::Mmap;
-use std::io::Write;
 
-use storage::{RawHeader, TGitManifest, ManifestTensor};
+use storage::{RawHeader, VektManifest, ManifestTensor};
 
 pub trait ModelArchiver {
-    fn process(&self, save_blobs: bool) -> Result<TGitManifest, Box<dyn std::error::Error>>;
-    fn restore(manifest: &TGitManifest, output_path: &std::path::Path, filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>>;
+    fn process(&self, save_blobs: bool) -> Result<VektManifest, Box<dyn std::error::Error>>;
+    fn restore(manifest: &VektManifest, output_path: &std::path::Path, filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub struct SafetensorFile {
@@ -39,6 +36,7 @@ impl SafetensorFile {
     }
     pub fn open(path: &str) -> std::io::Result<Self> {
         // Open the file and create a memory-mapped buffer
+        use std::fs::File;
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
 
@@ -56,9 +54,7 @@ impl SafetensorFile {
 }
 
 impl ModelArchiver for SafetensorFile {
-    fn process(&self, save_blobs: bool) -> Result<TGitManifest, Box<dyn std::error::Error>> {
-
-        let store_path = utils::get_store_path();
+    fn process(&self, save_blobs: bool) -> Result<VektManifest, Box<dyn std::error::Error>> {
         let header_entries: Vec<(usize, &String, &storage::RawTensorMetaData)> = self.header.iter()
             .enumerate()
             .map(|(i, (k, v))| (i, k, v))
@@ -79,19 +75,14 @@ impl ModelArchiver for SafetensorFile {
                         return None;
                     }
                     let data_slice = &self.mmap[absolute_start..absolute_end];
-                    let hash = blake3::hash(data_slice);
-                    let hash_hex = hex::encode(hash.as_bytes());
+                    
+                    // Use centralized blob hash computation
+                    let hash_hex = blobs::compute_blob_hash(data_slice);
 
                     if save_blobs {
-                        let blob_path = store_path.join(&hash_hex);
-                        // Only write if it doesn't exist (Deduplication!)
-                        if !blob_path.exists() {
-                            // We use a temporary file + rename for atomic writes (crash safety)
-                            let tmp_path = blob_path.with_extension("tmp");
-                            if let Ok(mut f) = File::create(&tmp_path) {
-                                f.write_all(data_slice).unwrap();
-                                fs::rename(tmp_path, blob_path).unwrap();
-                            }
+                        // Use centralized blob saving with deduplication
+                        if let Err(e) = blobs::write_blob_atomic(data_slice) {
+                            eprintln!("Failed to save blob for tensor '{}': {}", tensor_name, e);
                         }
                     }
 
@@ -108,14 +99,14 @@ impl ModelArchiver for SafetensorFile {
                 },
             )
             .collect();
-        Ok(TGitManifest {
+        Ok(VektManifest {
             tensors: results,
             version: "1.0".to_string(),
             total_size: self.mmap.len(),
         })
     }
-    fn restore(manifest: &TGitManifest, output_path: &std::path::Path, filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
-        // Delegate to the existing restore logic in TGitManifest
+    fn restore(manifest: &VektManifest, output_path: &std::path::Path, filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+        // Delegate to the existing restore logic in VektManifest
         // In a real multi-format system, this logic would likely live here or in a Safetensors-specific module
         manifest.restore(output_path, filter)
     }

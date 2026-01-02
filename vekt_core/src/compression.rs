@@ -1,4 +1,4 @@
-use crate::errors::{TGitError, Result};
+use crate::errors::{VektError, Result};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -9,13 +9,13 @@ const COMPRESSION_LEVEL: u32 = 6;
 /// Compress data using zstd
 pub fn compress_blob(data: &[u8]) -> Result<Vec<u8>> {
     zstd::encode_all(data, COMPRESSION_LEVEL as i32)
-        .map_err(|e| TGitError::CompressionError(e.to_string()))
+        .map_err(|e| VektError::CompressionError(e.to_string()))
 }
 
 /// Decompress data using zstd
 pub fn decompress_blob(compressed: &[u8]) -> Result<Vec<u8>> {
     zstd::decode_all(compressed)
-        .map_err(|e| TGitError::DecompressionError(e.to_string()))
+        .map_err(|e| VektError::DecompressionError(e.to_string()))
 }
 
 /// Save blob with optional compression
@@ -25,7 +25,7 @@ pub fn save_blob_with_compression(
     data: &[u8],
     enable_compression: bool,
 ) -> Result<bool> {
-    // Create parent directory if needed
+    // Create parent directory if needed (get_store_path already ensures .vekt has .gitignore)
     if let Some(parent) = blob_path.parent() {
         fs::create_dir_all(parent)?;
     }

@@ -1,5 +1,5 @@
 [package]
-name = "tgit"
+name = "vekt"
 
 version.workspace = true
 edition.workspace = true
@@ -8,7 +8,7 @@ authors.workspace = true
 
 [dependencies]
 # Point to the local library folder
-tgit_core = { path = "../tgit_core" }
+vekt_core = { path = "../vekt_core" }
 
 clap = { version = "4.4", features = ["derive"] }
 indicatif = "0.17"

@@ -1,5 +1,5 @@
 [package]
-name = "tgit_core"
+name = "vekt_core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

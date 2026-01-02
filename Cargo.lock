@@ -1587,36 +1587,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tgit"
-version = "0.1.0"
-dependencies = [
- "clap",
- "indicatif",
- "serde_json",
- "tgit_core",
- "tokio",
-]
-
-[[package]]
-name = "tgit_core"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "futures",
- "hex",
- "indexmap",
- "memmap2",
- "rand",
- "rayon",
- "rust-s3",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "zstd",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1883,6 +1853,36 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vekt"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "indicatif",
+ "serde_json",
+ "tokio",
+ "vekt_core",
+]
+
+[[package]]
+name = "vekt_core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "futures",
+ "hex",
+ "indexmap",
+ "memmap2",
+ "rand",
+ "rayon",
+ "rust-s3",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "zstd",
+]
 
 [[package]]
 name = "version_check"

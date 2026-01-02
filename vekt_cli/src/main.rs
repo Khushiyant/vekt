@@ -2,16 +2,16 @@ use std::{fs::File};
 use std::path::PathBuf;
 use std::io::Write;
 use std::collections::HashSet;
-use tgit_core::SafetensorFile;
-use tgit_core::ModelArchiver;
-use tgit_core::utils::{get_store_path, LockFile, find_tgit_root};
-use tgit_core::remote::RemoteClient;
+use vekt_core::SafetensorFile;
+use vekt_core::ModelArchiver;
+use vekt_core::utils::{get_store_path, LockFile, find_vekt_root};
+use vekt_core::remote::RemoteClient;
 
 use clap::{Parser, Subcommand};
 
 
 #[derive(Parser)]
-#[command(name = "tgit")]
+#[command(name = "vekt")]
 #[command(author = env!("CARGO_PKG_AUTHORS"))] 
 #[command(version = env!("CARGO_PKG_VERSION"))] 
 #[command(about = "Git for Tensors", long_about = None)]
@@ -73,15 +73,15 @@ fn scan_manifests(dir: &std::path::Path, hashes: &mut HashSet<String>) -> std::i
             if path.is_dir() {
                  let name = path.file_name().unwrap_or_default().to_string_lossy();
                  // Ignore common build/hidden dirs to avoid scanning too much or loops
-                 if name == ".git" || name == ".tgit" || name == "target" || name == "node_modules" {
+                 if name == ".git" || name == ".vekt" || name == "target" || name == "node_modules" {
                      continue;
                  }
                 scan_manifests(&path, hashes)?;
             } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.ends_with(".tgit.json") {
+                if name.ends_with(".vekt.json") {
                      let f = File::open(&path)?;
                      let reader = std::io::BufReader::new(f);
-                     if let Ok(manifest) = serde_json::from_reader::<_, tgit_core::storage::TGitManifest>(reader) {
+                     if let Ok(manifest) = serde_json::from_reader::<_, vekt_core::storage::VektManifest>(reader) {
                          for tensor in manifest.tensors.values() {
                              hashes.insert(tensor.hash.clone());
                          }
@@ -116,14 +116,14 @@ fn scan_git_history(repo_root: &std::path::Path, hashes: &mut HashSet<String>) -
 
         let objects = String::from_utf8_lossy(&output.stdout);
         
-        // Collect all object SHAs that are .tgit.json files
+        // Collect all object SHAs that are .vekt.json files
         let mut manifest_objects = Vec::new();
         for line in objects.lines() {
             // Format: "<sha> <path>" or just "<sha>" for commits
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() == 2 {
                 let (sha, path) = (parts[0], parts[1]);
-                if path.ends_with(".tgit.json") {
+                if path.ends_with(".vekt.json") {
                     manifest_objects.push(sha.to_string());
                 }
             }
@@ -185,7 +185,7 @@ fn scan_git_history(repo_root: &std::path::Path, hashes: &mut HashSet<String>) -
                 reader.read_exact(&mut newline)?;
 
                 // Try to parse as manifest
-                if let Ok(manifest) = serde_json::from_slice::<tgit_core::storage::TGitManifest>(&content) {
+                if let Ok(manifest) = serde_json::from_slice::<vekt_core::storage::VektManifest>(&content) {
                     for tensor in manifest.tensors.values() {
                         hashes.insert(tensor.hash.clone());
                     }
@@ -205,9 +205,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check if repository is initialized for all commands except Init
     if !matches!(cli.command, Commands::Init) {
-        if find_tgit_root().is_none() {
-            eprintln!("Error: Not a tgit repository (or any parent up to mount point)");
-            eprintln!("Run 'tgit init' first to initialize a repository.");
+        if find_vekt_root().is_none() {
+            eprintln!("Error: Not a vekt repository (or any parent up to mount point)");
+            eprintln!("Run 'vekt init' first to initialize a repository.");
             std::process::exit(1);
         }
     }
@@ -215,26 +215,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.command {
         Commands::Init => {
             let current_dir = std::env::current_dir()?;
-            let tgit_dir = current_dir.join(".tgit");
+            let vekt_dir = current_dir.join(".vekt");
             
-            if tgit_dir.exists() {
-                println!("TGit repository already exists in {}", current_dir.display());
+            if vekt_dir.exists() {
+                println!("vekt repository already exists in {}", current_dir.display());
                 return Ok(());
             }
 
-            std::fs::create_dir_all(&tgit_dir)?;
-            std::fs::create_dir_all(tgit_dir.join("blobs"))?;
+            std::fs::create_dir_all(&vekt_dir)?;
+            std::fs::create_dir_all(vekt_dir.join("blobs"))?;
             
             // Create default config
-            let config = tgit_core::storage::TGitConfig::default();
+            let config = vekt_core::storage::VektConfig::default();
             config.save()?;
             
-            // Create .gitignore to ignore everything in .tgit
+            // Create .gitignore to ignore everything in .vekt
             let gitignore_content = "*\n";
-            std::fs::write(tgit_dir.join(".gitignore"), gitignore_content)?;
-                        println!("Initialized empty TGit repository in {}", tgit_dir.display());
-            println!("\nTGit tracks machine learning models at the tensor level.");
-            println!("Use 'tgit add <model.safetensors>' to start tracking a model.");
+            std::fs::write(vekt_dir.join(".gitignore"), gitignore_content)?;
+                        println!("Initialized empty vekt repository in {}", vekt_dir.display());
+            println!("\nvekt tracks machine learning models at the tensor level.");
+            println!("Use 'vekt add <model.safetensors>' to start tracking a model.");
         }
 
         Commands::Add { path, compress } => {
@@ -248,7 +248,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let manifest = file.process(true)?;
             let manifest_json = serde_json::to_string_pretty(&manifest)?;
 
-            let output_path = path.with_extension("tgit.json");
+            let output_path = path.with_extension("vekt.json");
             let mut output_file = File::create(&output_path)?;
 
             output_file.write_all(manifest_json.as_bytes())?;
@@ -268,9 +268,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let old_file = File::open(old)?;
             let new_file = File::open(new)?;
             
-            let old_manifest: tgit_core::storage::TGitManifest = 
+            let old_manifest: vekt_core::storage::VektManifest = 
                 serde_json::from_reader(std::io::BufReader::new(old_file))?;
-            let new_manifest: tgit_core::storage::TGitManifest = 
+            let new_manifest: vekt_core::storage::VektManifest = 
                 serde_json::from_reader(std::io::BufReader::new(new_file))?;
             
             old_manifest.print_diff(&new_manifest);
@@ -279,14 +279,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Restore { path, layers } => {
             let file = File::open(&path).expect("Failed to open manifest file");
             let reader = std::io::BufReader::new(file);
-            let manifest: tgit_core::storage::TGitManifest = serde_json::from_reader(reader)
+            let manifest: vekt_core::storage::VektManifest = serde_json::from_reader(reader)
                 .expect("Failed to parse manifest JSON");
 
             let output_path = if let Some(file_name) = path.file_name() {
                 let name_str = file_name.to_string_lossy();
 
                 let stem = name_str
-                    .replace(".tgit.json", "")
+                    .replace(".vekt.json", "")
                     .replace(".json", "");
                 path.with_file_name(format!("{}.safetensors", stem))
             } else {
@@ -305,7 +305,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Pull { remote } => {
-            let config = tgit_core::storage::TGitConfig::load()?;
+            let config = vekt_core::storage::VektConfig::load()?;
             if let Some(url) = config.remotes.get(remote) {
                 println!("Pulling from remote '{}' at URL '{}'", remote, url);
                 
@@ -316,7 +316,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let entry = entry?;
                     let path = entry.path();
                     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        if name.ends_with(".tgit.json") {
+                        if name.ends_with(".vekt.json") {
                             println!("Processing manifest: {}", name);
                             match client.pull(name).await {
                                 Ok(manifest) => {
@@ -337,7 +337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Push { remote } => {
-            let config = tgit_core::storage::TGitConfig::load()?;
+            let config = vekt_core::storage::VektConfig::load()?;
             if let Some(url) = config.remotes.get(remote) {
                 println!("Pushing to remote '{}' at URL '{}'", remote, url);
                 
@@ -348,13 +348,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let entry = entry?;
                     let path = entry.path();
                     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        if name.ends_with(".tgit.json") {
+                        if name.ends_with(".vekt.json") {
                             println!("Pushing manifest: {}", name);
                             
                             // Load manifest
                             let f = File::open(&path)?;
                             let reader = std::io::BufReader::new(f);
-                            let manifest: tgit_core::storage::TGitManifest = serde_json::from_reader(reader)?;
+                            let manifest: vekt_core::storage::VektManifest = serde_json::from_reader(reader)?;
 
                             match client.push(&manifest, name).await {
                                 Ok(_) => println!("Successfully pushed {}", name),
@@ -369,8 +369,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Status {} => {
-            let config = tgit_core::storage::TGitConfig::load()?;
-            println!("TGit Configuration Status:");
+            let config = vekt_core::storage::VektConfig::load()?;
+            println!("vekt Configuration Status:");
             println!("Remotes:");
             for (name, url) in &config.remotes {
                 println!("  {} -> {}", name, url);
@@ -389,7 +389,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut referenced_hashes = HashSet::new();
             
             // Find root to scan from
-            let scan_root = find_tgit_root().unwrap_or_else(|| PathBuf::from("."));
+            let scan_root = find_vekt_root().unwrap_or_else(|| PathBuf::from("."));
             println!("Scanning for manifests starting from: {}", scan_root.display());
             
             // Scan current working tree
@@ -428,7 +428,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Remote management commands
         Commands::Remote { action } => {
-            let mut config = tgit_core::storage::TGitConfig::load()?;
+            let mut config = vekt_core::storage::VektConfig::load()?;
 
             match action {
                 RemoteCommand::Add { name, url } => {

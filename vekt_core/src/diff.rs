@@ -1,4 +1,4 @@
-use crate::storage::TGitManifest;
+use crate::storage::VektManifest;
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -26,9 +26,9 @@ pub struct StorageSavings {
     pub deduplication_ratio: f64,
 }
 
-impl TGitManifest {
+impl VektManifest {
     /// Compare two manifests and show differences
-    pub fn diff(&self, other: &TGitManifest) -> ManifestComparison {
+    pub fn diff(&self, other: &VektManifest) -> ManifestComparison {
         let mut added = Vec::new();
         let mut removed = Vec::new();
         let mut modified = Vec::new();
@@ -77,7 +77,7 @@ impl TGitManifest {
     }
 
     /// Print a human-readable diff
-    pub fn print_diff(&self, other: &TGitManifest) {
+    pub fn print_diff(&self, other: &VektManifest) {
         let comparison = self.diff(other);
         let diff = &comparison.tensor_diff;
 
@@ -135,7 +135,7 @@ impl TGitManifest {
     }
 }
 
-fn calculate_storage_savings(old: &TGitManifest, new: &TGitManifest) -> StorageSavings {
+fn calculate_storage_savings(old: &VektManifest, new: &VektManifest) -> StorageSavings {
     let mut old_hashes = HashSet::new();
     let mut new_hashes = HashSet::new();
 
@@ -196,13 +196,13 @@ mod tests {
         new_tensors.insert("t1".to_string(), create_test_tensor("hash1", vec![1, 2]));
         new_tensors.insert("t2".to_string(), create_test_tensor("hash2", vec![3, 4]));
 
-        let old_manifest = TGitManifest {
+        let old_manifest = VektManifest {
             tensors: old_tensors,
             version: "1.0".to_string(),
             total_size: 100,
         };
 
-        let new_manifest = TGitManifest {
+        let new_manifest = VektManifest {
             tensors: new_tensors,
             version: "1.0".to_string(),
             total_size: 200,

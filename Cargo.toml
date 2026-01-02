@@ -6,7 +6,7 @@ authors = ["Khushiyant Chauhan"]
 
 [workspace]
 members = [
-    "tgit_core",
-    "tgit_cli"
+    "vekt_core",
+    "vekt_cli"
 ]
 resolver = "2"
