@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vekt | Semantic Storage for AI</title>
+    <meta name="description"
+        content="A semantic engine for machine learning models. Deduplicate weights, diff tensors, and sync efficiently.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* --- VARIABLES BASED ON LOGO PALETTE --- */
+        :root {
+            /* The warm beige background from the image */
+            --bg-color: #EBE9E4;
+            /* The dark charcoal/black from the text */
+            --text-color: #1A1A1A;
+            /* A slightly lighter grey for borders/accents */
+            --accent-color: #333333;
+            /* Code block background */
+            --code-bg: #D6D4D0;
+
+            --font-main: 'Space Mono', monospace;
+            --max-width: 1000px;
+        }
+
+        /* --- GLOBAL RESET --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: var(--text-color);
+            text-decoration: underline;
+            text-underline-offset: 4px;
+            transition: opacity 0.2s;
+        }
+
+        a:hover {
+            opacity: 0.7;
+        }
+
+        /* --- LAYOUT UTILS --- */
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        section {
+            padding: 4rem 0;
+            border-bottom: 2px solid var(--text-color);
+        }
+
+        section:last-child {
+            border-bottom: none;
+        }
+
+        /* --- HEADER / NAV --- */
+        header {
+            padding: 2rem 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 4px solid var(--text-color);
+        }
+
+        .logo {
+            font-weight: 700;
+            font-size: 2rem;
+            letter-spacing: -2px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Pixel art arrow imitation using CSS borders */
+        .pixel-icon {
+            width: 20px;
+            height: 20px;
+            position: relative;
+        }
+
+        .pixel-arrow {
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid var(--text-color);
+            position: absolute;
+            top: 5px;
+        }
+
+        .pixel-arrow:nth-child(2) {
+            top: 0px;
+        }
+
+        .pixel-arrow:nth-child(3) {
+            top: 10px;
+        }
+
+        .nav-links a {
+            margin-left: 2rem;
+            font-weight: 700;
+            text-decoration: none;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .nav-links a:hover {
+            text-decoration: line-through;
+        }
+
+        /* --- HERO SECTION --- */
+        .hero {
+            padding: 6rem 0;
+            text-align: left;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            letter-spacing: -1px;
+        }
+
+        .hero p.subtitle {
+            font-size: 1.25rem;
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+            opacity: 0.9;
+        }
+
+        .install-box {
+            background: var(--text-color);
+            color: var(--bg-color);
+            padding: 1.5rem;
+            border-radius: 0;
+            /* Brutalist/Retro style */
+            position: relative;
+            box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.1);
+        }
+
+        .install-box pre {
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: var(--font-main);
+            font-size: 0.9rem;
+        }
+
+        .os-tabs {
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .os-tab {
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+            font-size: 0.8rem;
+            opacity: 0.5;
+            padding-bottom: 2px;
+            border-bottom: 2px solid transparent;
+        }
+
+        .os-tab.active {
+            opacity: 1;
+            border-bottom: 2px solid var(--bg-color);
+        }
+
+        /* --- FEATURES GRID --- */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 3rem;
+            margin-top: 2rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            border-bottom: 2px solid var(--text-color);
+            display: inline-block;
+            padding-bottom: 0.5rem;
+        }
+
+        /* --- TERMINAL DEMO --- */
+        .terminal-window {
+            background: var(--text-color);
+            color: var(--bg-color);
+            padding: 2rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-shadow: 10px 10px 0px rgba(0, 0, 0, 0.15);
+            margin: 2rem 0;
+            overflow-x: auto;
+        }
+
+        .cmd {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .cmd::before {
+            content: "$ ";
+            opacity: 0.5;
+        }
+
+        .output {
+            opacity: 0.7;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .highlight {
+            color: #EBE9E4;
+            text-decoration: underline;
+        }
+
+        /* --- BUTTON --- */
+        .btn {
+            display: inline-block;
+            background: transparent;
+            color: var(--text-color);
+            border: 2px solid var(--text-color);
+            padding: 1rem 2rem;
+            font-weight: 700;
+            text-decoration: none;
+            margin-top: 1rem;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--text-color);
+            color: var(--bg-color);
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.2);
+            transform: translate(-2px, -2px);
+        }
+
+        /* --- FOOTER --- */
+        footer {
+            padding: 3rem 0;
+            text-align: center;
+            font-size: 0.8rem;
+            opacity: 0.8;
+            border-top: 4px solid var(--text-color);
+        }
+
+        /* --- UTILS --- */
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+
+            .install-box {
+                margin-right: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <header>
+            <div class="logo">
+                <div class="pixel-icon">
+                    <div class="pixel-arrow"></div>
+                    <div class="pixel-arrow"></div>
+                </div>
+                VEKT
+            </div>
+            <nav class="nav-links">
+                <a href="https://github.com/Khushiyant/vekt">GitHub</a>
+                <a href="#docs">Docs</a>
+            </nav>
+        </header>
+
+        <section class="hero">
+            <h1>Semantic Storage<br>for AI Models.</h1>
+            <p class="subtitle">
+                Stop treating ML models like binary blobs. <br>
+                Deduplicate weights, diff architectures, and sync efficiently.
+            </p>
+
+            <div class="install-box">
+                <div class="os-tabs">
+                    <div class="os-tab active" onclick="switchTab('unix')">Linux / macOS</div>
+                    <div class="os-tab" onclick="switchTab('win')">Windows</div>
+                </div>
+
+                <div id="cmd-unix">
+                    <pre>curl -fsSL https://raw.githubusercontent.com/Khushiyant/vekt/main/install.sh | sh</pre>
+                </div>
+                <div id="cmd-win" class="hidden">
+                    <pre>irm https://raw.githubusercontent.com/Khushiyant/vekt/main/install.ps1 | iex</pre>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>The Problem</h3>
+                    <p>Fine-tuning a 20GB model usually means saving a new 20GB file. Traditional storage is blind to
+                        the structure of your data, leading to massive redundancy and slow transfers.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>The Solution</h3>
+                    <p><strong>vekt</strong> decomposes `.safetensors` into individual layers. It hashes every tensor,
+                        stores them in a content-addressable store, and reconstructs models from lightweight JSON
+                        manifests.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h3>How it works</h3>
+            <p>It feels just like Git, but built for tensors.</p>
+
+            <div class="terminal-window">
+                <div class="cmd">vekt init</div>
+                <span class="output">Initialized empty vekt repository in ./.vekt</span>
+
+                <div class="cmd">vekt add llama-3-8b.safetensors</div>
+                <span class="output">
+                    Scanning tensors...<br>
+                    Hashing [################################] 100%<br>
+                    Saved 291 tensors. Manifest written to llama-3-8b.vekt.json
+                </span>
+
+                <div class="cmd">vekt diff v1.safetensors v2.safetensors</div>
+                <span class="output">
+                    Manifest Comparison:<br>
+                    ==================<br>
+                    Unchanged Tensors: 289<br>
+                    ~ Modified: <span class="highlight">layers.10.attention.weight</span> (Shape [4096, 4096])<br>
+                    ~ Modified: <span class="highlight">layers.10.mlp.weight</span> (Shape [11008, 4096])<br>
+                    Storage savings: 99.2% deduplication
+                </span>
+            </div>
+        </section>
+
+        <section>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Zero Redundancy</h3>
+                    <p>Fine-tune BERT ten ways, store the encoder exactly once. If a layer hasn't changed, it takes up
+                        zero additional space on disk.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Semantic Diff</h3>
+                    <p>Don't just see "Binary file changed". See exactly which tensors were modified, added, or removed
+                        between model versions.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Remote Sync</h3>
+                    <p>Push to S3 compatible storage. <code>vekt push</code> only uploads the specific blobs that the
+                        remote is missing.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>
+                <a href="https://github.com/Khushiyant/vekt">View Source on GitHub</a> <br><br>
+                Released under the Apache-2.0 License.<br>
+                &copy; 2026 Khushiyant Chauhan.
+            </p>
+        </footer>
+
+    </div>
+
+    <script>
+        function switchTab(os) {
+            // Reset tabs
+            document.querySelectorAll('.os-tab').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('[id^="cmd-"]').forEach(el => el.classList.add('hidden'));
+
+            // Activate selection
+            if (os === 'unix') {
+                document.querySelector('.os-tab:nth-child(1)').classList.add('active');
+                document.getElementById('cmd-unix').classList.remove('hidden');
+            } else {
+                document.querySelector('.os-tab:nth-child(2)').classList.add('active');
+                document.getElementById('cmd-win').classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+
+</html>
