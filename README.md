@@ -30,7 +30,21 @@ Built on content-addressable storage (CAS), like Git's object database, but purp
 
 **Semantic diffing** - See which specific tensors changed, not just "files differ."
 
-## Installation
+## Installation 
+
+Just copy the below commands and you are done
+#### Linux and MacOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Khushiyant/vekt/main/install.sh | sh
+```
+
+
+#### Windows Powershell
+```bash
+irm https://raw.githubusercontent.com/Khushiyant/vekt/main/install.ps1 | iex
+```
+## Development
 
 Requires Rust 2024 edition or later.
 
