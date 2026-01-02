@@ -1,11 +1,11 @@
+use crate::blobs;
+use crate::utils::{ensure_vekt_dir, find_vekt_root};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
-use crate::blobs;
-use indexmap::IndexMap;
-use crate::utils::{find_vekt_root, ensure_vekt_dir};
 
 // Metadata for a single tensor in raw format in safetensor file
 #[derive(Serialize, Deserialize, Debug)]
@@ -19,7 +19,6 @@ pub struct RawTensorMetaData {
 }
 // Header for safetensor file in raw format
 pub type RawHeader = IndexMap<String, RawTensorMetaData>;
-
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ManifestTensor {
@@ -48,8 +47,6 @@ pub struct VektConfig {
     pub remotes: HashMap<String, String>,
 }
 
-
-
 impl VektManifest {
     pub fn print_summary(&self) {
         println!("vekt Manifest Summary:");
@@ -57,10 +54,10 @@ impl VektManifest {
         println!("Total Tensors: {}", self.tensors.len());
         println!("Total Size: {} bytes", self.total_size);
         println!("Tensors:");
-        
+
         let mut sorted_tensors: Vec<(&String, &ManifestTensor)> = self.tensors.iter().collect();
         sorted_tensors.sort_by_key(|k| k.1.index);
-        
+
         for (name, tensor) in sorted_tensors {
             println!(
                 "- [{}] {}: shape={:?}, dtype={}, hash={}",
@@ -69,12 +66,18 @@ impl VektManifest {
         }
     }
 
-    pub fn restore(&self, output_path: &std::path::Path, filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn restore(
+        &self,
+        output_path: &std::path::Path,
+        filter: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let file = File::create(output_path)?;
         let mut writer = std::io::BufWriter::new(file);
 
         // Filter tensors
-        let mut sorted_tensor_names: Vec<&String> = self.tensors.keys()
+        let mut sorted_tensor_names: Vec<&String> = self
+            .tensors
+            .keys()
             .filter(|name| {
                 if let Some(f) = filter {
                     // Simple logic: keep if name contains any of the comma-separated terms
@@ -84,7 +87,7 @@ impl VektManifest {
                 }
             })
             .collect();
-        
+
         // Fix Issue #4: Sort by original index to ensure deterministic restoration
         sorted_tensor_names.sort_by_key(|name| self.tensors[*name].index);
 
@@ -113,7 +116,8 @@ impl VektManifest {
             let padding = (8 - (current_offset % 8)) % 8;
             current_offset += padding;
 
-            let size = tensor.shape.iter().product::<usize>() * crate::utils::get_dtype_size(&tensor.dtype);
+            let size = tensor.shape.iter().product::<usize>()
+                * crate::utils::get_dtype_size(&tensor.dtype);
             let start = current_offset;
             let end = current_offset + size;
 
@@ -160,7 +164,7 @@ impl VektManifest {
             let blob_path = blobs::get_blob_path(&tensor.hash);
             let mut blob_file = File::open(blob_path)?;
             let bytes_copied = std::io::copy(&mut blob_file, &mut writer)?;
-            
+
             current_write_pos += bytes_copied as usize;
             written_hashes.insert(tensor.hash.clone(), (0, 0)); // Value irrelevant, just marking as written
         }
@@ -191,7 +195,7 @@ impl VektConfig {
         serde_json::to_writer_pretty(file, self)?;
         Ok(())
     }
-    
+
     pub fn add_remote(&mut self, name: String, url: String) {
         self.remotes.insert(name, url);
     }

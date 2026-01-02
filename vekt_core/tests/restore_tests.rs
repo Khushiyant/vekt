@@ -1,11 +1,11 @@
+use indexmap::IndexMap;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
-use indexmap::IndexMap;
 
-use vekt_core::{SafetensorFile, ModelArchiver};
-use vekt_core::storage::{VektManifest, ManifestTensor};
 use vekt_core::blobs;
+use vekt_core::storage::{ManifestTensor, VektManifest};
+use vekt_core::{ModelArchiver, SafetensorFile};
 
 // Helper to create a dummy blob
 fn create_blob(data: &[u8]) -> String {
@@ -16,7 +16,7 @@ fn create_blob(data: &[u8]) -> String {
 fn test_full_cycle_restore() -> Result<(), Box<dyn std::error::Error>> {
     let original_path = "test_cycle_original.safetensors";
     let restored_path = "test_cycle_restored.safetensors";
-    
+
     {
         let mut file = File::create(original_path)?;
         let header_json = r#"{"test_tensor": {"dtype":"F32", "shape":[1], "data_offsets":[0, 4]}}"#;
@@ -36,43 +36,49 @@ fn test_full_cycle_restore() -> Result<(), Box<dyn std::error::Error>> {
     let mut f = File::open(restored_path)?;
     let mut buffer = Vec::new();
     f.read_to_end(&mut buffer)?;
-    
+
     // Size = 8 (len) + 79 (header) + 4 (data) = 91 bytes
-    assert!(buffer.len() > 70); 
-    
+    assert!(buffer.len() > 70);
+
     std::fs::remove_file(restored_path)?;
-    
+
     Ok(())
 }
 
 #[test]
 fn test_shared_weights_deduplication() {
     // Unique data to avoid conflict
-    let data = vec![11u8, 22u8, 33u8, 44u8]; 
+    let data = vec![11u8, 22u8, 33u8, 44u8];
     let hash = create_blob(&data);
 
     let mut tensors = BTreeMap::new();
-    
-    tensors.insert("tensor_a".to_string(), ManifestTensor {
-        shape: vec![4],
-        dtype: "U8".to_string(),
-        hash: hash.clone(),
-        index: 0,
-        extra: IndexMap::new(),
-    });
 
-    tensors.insert("tensor_b".to_string(), ManifestTensor {
-        shape: vec![4],
-        dtype: "U8".to_string(),
-        hash: hash.clone(),
-        index: 1,
-        extra: IndexMap::new(),
-    });
+    tensors.insert(
+        "tensor_a".to_string(),
+        ManifestTensor {
+            shape: vec![4],
+            dtype: "U8".to_string(),
+            hash: hash.clone(),
+            index: 0,
+            extra: IndexMap::new(),
+        },
+    );
+
+    tensors.insert(
+        "tensor_b".to_string(),
+        ManifestTensor {
+            shape: vec![4],
+            dtype: "U8".to_string(),
+            hash: hash.clone(),
+            index: 1,
+            extra: IndexMap::new(),
+        },
+    );
 
     let manifest = VektManifest {
         tensors,
         version: "1.0".to_string(),
-        total_size: 4, 
+        total_size: 4,
     };
 
     let output_path = std::path::Path::new("test_shared.safetensors");
@@ -83,14 +89,17 @@ fn test_shared_weights_deduplication() {
     file.read_to_end(&mut buffer).unwrap();
 
     let header_len = u64::from_le_bytes(buffer[0..8].try_into().unwrap()) as usize;
-    let header_json = &buffer[8..8+header_len];
+    let header_json = &buffer[8..8 + header_len];
     let header_str = std::str::from_utf8(header_json).unwrap();
     let header: serde_json::Value = serde_json::from_str(header_str).unwrap();
 
     let offset_a = header["tensor_a"]["data_offsets"].as_array().unwrap();
     let offset_b = header["tensor_b"]["data_offsets"].as_array().unwrap();
-    
-    assert_eq!(offset_a, offset_b, "Offsets for shared weights must be identical");
+
+    assert_eq!(
+        offset_a, offset_b,
+        "Offsets for shared weights must be identical"
+    );
 
     std::fs::remove_file(output_path).unwrap();
     std::fs::remove_file(blobs::get_blob_path(&hash)).ok();
@@ -104,22 +113,28 @@ fn test_alignment_padding() {
     let hash_b = create_blob(&data_b);
 
     let mut tensors = BTreeMap::new();
-    
-    tensors.insert("tensor_a".to_string(), ManifestTensor {
-        shape: vec![1],
-        dtype: "U8".to_string(),
-        hash: hash_a.clone(),
-        index: 0,
-        extra: IndexMap::new(),
-    });
 
-    tensors.insert("tensor_b".to_string(), ManifestTensor {
-        shape: vec![1],
-        dtype: "U8".to_string(),
-        hash: hash_b.clone(),
-        index: 1,
-        extra: IndexMap::new(),
-    });
+    tensors.insert(
+        "tensor_a".to_string(),
+        ManifestTensor {
+            shape: vec![1],
+            dtype: "U8".to_string(),
+            hash: hash_a.clone(),
+            index: 0,
+            extra: IndexMap::new(),
+        },
+    );
+
+    tensors.insert(
+        "tensor_b".to_string(),
+        ManifestTensor {
+            shape: vec![1],
+            dtype: "U8".to_string(),
+            hash: hash_b.clone(),
+            index: 1,
+            extra: IndexMap::new(),
+        },
+    );
 
     let manifest = VektManifest {
         tensors,
@@ -159,13 +174,16 @@ fn test_extra_metadata_preservation() {
     extra.insert("license".to_string(), serde_json::json!("MIT"));
 
     let mut tensors = BTreeMap::new();
-    tensors.insert("tensor_meta".to_string(), ManifestTensor {
-        shape: vec![1],
-        dtype: "U8".to_string(),
-        hash: hash.clone(),
-        index: 0,
-        extra,
-    });
+    tensors.insert(
+        "tensor_meta".to_string(),
+        ManifestTensor {
+            shape: vec![1],
+            dtype: "U8".to_string(),
+            hash: hash.clone(),
+            index: 0,
+            extra,
+        },
+    );
 
     let manifest = VektManifest {
         tensors,
@@ -179,13 +197,12 @@ fn test_extra_metadata_preservation() {
     let mut file = File::open(output_path).unwrap();
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).unwrap();
-    
+
     let header_len = u64::from_le_bytes(buffer[0..8].try_into().unwrap()) as usize;
-    let header_str = std::str::from_utf8(&buffer[8..8+header_len]).unwrap();
-    
+    let header_str = std::str::from_utf8(&buffer[8..8 + header_len]).unwrap();
+
     assert!(header_str.contains("\"quantization\":\"int8\""));
-    
+
     std::fs::remove_file(output_path).unwrap();
     std::fs::remove_file(blobs::get_blob_path(&hash)).ok();
 }
-

@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
 use std::fs::{self};
 use std::io;
+use std::path::{Path, PathBuf};
 
 /// Ensures .vekt directory exists with proper .gitignore file
 pub fn ensure_vekt_dir(vekt_path: &Path) -> io::Result<()> {
@@ -37,12 +37,14 @@ pub fn find_vekt_root() -> Option<PathBuf> {
 pub fn get_store_path() -> PathBuf {
     let vekt_dir = match find_vekt_root() {
         Some(root) => root.join(".vekt"),
-        None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(".vekt"),
+        None => std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(".vekt"),
     };
-    
+
     // Ensure .vekt has .gitignore (ignore errors as this is best-effort)
     let _ = ensure_vekt_dir(&vekt_dir);
-    
+
     vekt_dir.join("blobs")
 }
 
@@ -68,10 +70,11 @@ pub struct LockFile {
 impl LockFile {
     pub fn lock() -> Result<Self, io::Error> {
         // Use the found root or current dir for locking
-        let root = find_vekt_root().unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        let root = find_vekt_root()
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
         let vekt_dir = root.join(".vekt");
         let path = vekt_dir.join("lock");
-        
+
         // Ensure .vekt exists with .gitignore
         ensure_vekt_dir(&vekt_dir)?;
 
@@ -80,7 +83,12 @@ impl LockFile {
             .write(true)
             .create_new(true)
             .open(&path)
-            .map_err(|_| io::Error::new(io::ErrorKind::AlreadyExists, "vekt is currently locked by another process."))?;
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "vekt is currently locked by another process.",
+                )
+            })?;
 
         Ok(LockFile { path })
     }

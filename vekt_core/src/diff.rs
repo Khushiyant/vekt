@@ -83,13 +83,18 @@ impl VektManifest {
 
         println!("\nManifest Comparison:");
         println!("==================");
-        
+
         if !diff.added.is_empty() {
             println!("\nAdded Tensors ({}):", diff.added.len());
             for name in &diff.added {
                 let tensor = &other.tensors[name];
-                println!("  + {} [shape: {:?}, dtype: {}, hash: {}]", 
-                    name, tensor.shape, tensor.dtype, &tensor.hash[..8]);
+                println!(
+                    "  + {} [shape: {:?}, dtype: {}, hash: {}]",
+                    name,
+                    tensor.shape,
+                    tensor.dtype,
+                    &tensor.hash[..8]
+                );
             }
         }
 
@@ -97,8 +102,13 @@ impl VektManifest {
             println!("\nRemoved Tensors ({}):", diff.removed.len());
             for name in &diff.removed {
                 let tensor = &self.tensors[name];
-                println!("  - {} [shape: {:?}, dtype: {}, hash: {}]", 
-                    name, tensor.shape, tensor.dtype, &tensor.hash[..8]);
+                println!(
+                    "  - {} [shape: {:?}, dtype: {}, hash: {}]",
+                    name,
+                    tensor.shape,
+                    tensor.dtype,
+                    &tensor.hash[..8]
+                );
             }
         }
 
@@ -107,9 +117,10 @@ impl VektManifest {
             for name in &diff.modified {
                 let old_tensor = &self.tensors[name];
                 let new_tensor = &other.tensors[name];
-                println!("  ~ {} [shape: {:?} -> {:?}, dtype: {}, hash: {} -> {}]",
-                    name, 
-                    old_tensor.shape, 
+                println!(
+                    "  ~ {} [shape: {:?} -> {:?}, dtype: {}, hash: {} -> {}]",
+                    name,
+                    old_tensor.shape,
                     new_tensor.shape,
                     new_tensor.dtype,
                     &old_tensor.hash[..8],
@@ -119,19 +130,32 @@ impl VektManifest {
         }
 
         println!("\nUnchanged Tensors: {}", diff.unchanged.len());
-        
+
         let sign = if comparison.size_change >= 0 { "+" } else { "" };
-        println!("Total Size Change: {}{} bytes", sign, comparison.size_change);
+        println!(
+            "Total Size Change: {}{} bytes",
+            sign, comparison.size_change
+        );
 
         println!("\nStorage Efficiency:");
-        println!("  Old manifest: {} tensors, {} unique blobs",
+        println!(
+            "  Old manifest: {} tensors, {} unique blobs",
             comparison.storage_savings.total_tensors_old,
-            comparison.storage_savings.unique_blobs_old);
-        println!("  New manifest: {} tensors, {} unique blobs",
+            comparison.storage_savings.unique_blobs_old
+        );
+        println!(
+            "  New manifest: {} tensors, {} unique blobs",
             comparison.storage_savings.total_tensors_new,
-            comparison.storage_savings.unique_blobs_new);
-        println!("  Shared blobs: {}", comparison.storage_savings.shared_blobs);
-        println!("  Deduplication ratio: {:.2}x", comparison.storage_savings.deduplication_ratio);
+            comparison.storage_savings.unique_blobs_new
+        );
+        println!(
+            "  Shared blobs: {}",
+            comparison.storage_savings.shared_blobs
+        );
+        println!(
+            "  Deduplication ratio: {:.2}x",
+            comparison.storage_savings.deduplication_ratio
+        );
     }
 }
 
@@ -153,7 +177,7 @@ fn calculate_storage_savings(old: &VektManifest, new: &VektManifest) -> StorageS
 
     let total_unique_blobs = old_hashes.union(&new_hashes).count();
     let total_tensor_count = old.tensors.len() + new.tensors.len();
-    
+
     let dedup_ratio = if total_unique_blobs > 0 {
         total_tensor_count as f64 / total_unique_blobs as f64
     } else {
@@ -173,9 +197,9 @@ fn calculate_storage_savings(old: &VektManifest, new: &VektManifest) -> StorageS
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
-    use indexmap::IndexMap;
     use crate::storage::ManifestTensor;
+    use indexmap::IndexMap;
+    use std::collections::BTreeMap;
 
     fn create_test_tensor(hash: &str, shape: Vec<usize>) -> ManifestTensor {
         ManifestTensor {

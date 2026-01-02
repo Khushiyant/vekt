@@ -1,4 +1,4 @@
-use crate::errors::{VektError, Result};
+use crate::errors::{Result, VektError};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -14,8 +14,7 @@ pub fn compress_blob(data: &[u8]) -> Result<Vec<u8>> {
 
 /// Decompress data using zstd
 pub fn decompress_blob(compressed: &[u8]) -> Result<Vec<u8>> {
-    zstd::decode_all(compressed)
-        .map_err(|e| VektError::DecompressionError(e.to_string()))
+    zstd::decode_all(compressed).map_err(|e| VektError::DecompressionError(e.to_string()))
 }
 
 /// Save blob with optional compression
@@ -32,7 +31,7 @@ pub fn save_blob_with_compression(
 
     let (final_data, compressed) = if enable_compression {
         let compressed_data = compress_blob(data)?;
-        
+
         // Only use compression if it actually reduces size
         if compressed_data.len() < data.len() {
             (compressed_data, true)
@@ -46,31 +45,31 @@ pub fn save_blob_with_compression(
     // Atomic write: write to temp file, then rename
     let tmp_path = blob_path.with_extension("tmp");
     let mut file = File::create(&tmp_path)?;
-    
+
     // Write compression flag (1 byte) + data
     file.write_all(&[if compressed { 1u8 } else { 0u8 }])?;
     file.write_all(&final_data)?;
     file.sync_all()?;
-    
+
     fs::rename(tmp_path, blob_path)?;
-    
+
     Ok(compressed)
 }
 
 /// Load blob with automatic decompression
 pub fn load_blob_with_decompression(blob_path: &Path) -> Result<Vec<u8>> {
     let mut file = File::open(blob_path)?;
-    
+
     // Read compression flag
     let mut flag = [0u8; 1];
     file.read_exact(&mut flag)?;
-    
+
     let is_compressed = flag[0] == 1;
-    
+
     // Read rest of data
     let mut data = Vec::new();
     file.read_to_end(&mut data)?;
-    
+
     if is_compressed {
         decompress_blob(&data)
     } else {
@@ -87,9 +86,12 @@ mod tests {
         let original = vec![42u8; 10000]; // Highly compressible
         let compressed = compress_blob(&original).unwrap();
         let decompressed = decompress_blob(&compressed).unwrap();
-        
+
         assert_eq!(original, decompressed);
-        assert!(compressed.len() < original.len(), "Data should be compressed");
+        assert!(
+            compressed.len() < original.len(),
+            "Data should be compressed"
+        );
     }
 
     #[test]
@@ -97,10 +99,10 @@ mod tests {
         use rand::Rng;
         let mut rng = rand::thread_rng();
         let original: Vec<u8> = (0..1000).map(|_| rng.r#gen()).collect();
-        
+
         let compressed = compress_blob(&original).unwrap();
         let decompressed = decompress_blob(&compressed).unwrap();
-        
+
         assert_eq!(original, decompressed);
     }
 }

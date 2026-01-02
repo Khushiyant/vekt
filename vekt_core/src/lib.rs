@@ -1,21 +1,25 @@
-pub mod storage;
-pub mod utils;
-pub mod remote;
-pub mod errors;
-pub mod validation;
+pub mod blobs;
 pub mod compression;
 pub mod diff;
-pub mod blobs;
+pub mod errors;
+pub mod remote;
+pub mod storage;
+pub mod utils;
+pub mod validation;
 
-use std::collections::BTreeMap;
-use rayon::prelude::*;
 use memmap2::Mmap;
+use rayon::prelude::*;
+use std::collections::BTreeMap;
 
-use storage::{RawHeader, VektManifest, ManifestTensor};
+use storage::{ManifestTensor, RawHeader, VektManifest};
 
 pub trait ModelArchiver {
     fn process(&self, save_blobs: bool) -> Result<VektManifest, Box<dyn std::error::Error>>;
-    fn restore(manifest: &VektManifest, output_path: &std::path::Path, filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>>;
+    fn restore(
+        manifest: &VektManifest,
+        output_path: &std::path::Path,
+        filter: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub struct SafetensorFile {
@@ -23,8 +27,6 @@ pub struct SafetensorFile {
     pub mmap: Mmap,
     pub header_len: usize,
 }
-
-
 
 impl SafetensorFile {
     pub fn new(mmap: Mmap, header: RawHeader, header_len: usize) -> Self {
@@ -55,7 +57,9 @@ impl SafetensorFile {
 
 impl ModelArchiver for SafetensorFile {
     fn process(&self, save_blobs: bool) -> Result<VektManifest, Box<dyn std::error::Error>> {
-        let header_entries: Vec<(usize, &String, &storage::RawTensorMetaData)> = self.header.iter()
+        let header_entries: Vec<(usize, &String, &storage::RawTensorMetaData)> = self
+            .header
+            .iter()
             .enumerate()
             .map(|(i, (k, v))| (i, k, v))
             .collect();
@@ -75,7 +79,7 @@ impl ModelArchiver for SafetensorFile {
                         return None;
                     }
                     let data_slice = &self.mmap[absolute_start..absolute_end];
-                    
+
                     // Use centralized blob hash computation
                     let hash_hex = blobs::compute_blob_hash(data_slice);
 
@@ -105,7 +109,11 @@ impl ModelArchiver for SafetensorFile {
             total_size: self.mmap.len(),
         })
     }
-    fn restore(manifest: &VektManifest, output_path: &std::path::Path, filter: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    fn restore(
+        manifest: &VektManifest,
+        output_path: &std::path::Path,
+        filter: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Delegate to the existing restore logic in VektManifest
         // In a real multi-format system, this logic would likely live here or in a Safetensors-specific module
         manifest.restore(output_path, filter)
