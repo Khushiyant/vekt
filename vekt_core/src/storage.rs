@@ -1,5 +1,6 @@
 use crate::blobs;
 use crate::utils::{ensure_vekt_dir, find_vekt_root};
+use crate::errors::{Result, VektError};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -70,7 +71,7 @@ impl VektManifest {
         &self,
         output_path: &std::path::Path,
         filter: Option<&str>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<()> {
         let file = File::create(output_path)?;
         let mut writer = std::io::BufWriter::new(file);
 
@@ -176,8 +177,8 @@ impl VektManifest {
 }
 
 impl VektConfig {
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let root = find_vekt_root().unwrap_or_else(|| std::env::current_dir().unwrap());
+    pub fn load() -> Result<Self> {
+        let root = find_vekt_root().ok_or(VektError::RepoNotFound)?;
         let path = root.join(".vekt").join("config.json");
         if !path.exists() {
             return Ok(VektConfig::default());
@@ -188,7 +189,7 @@ impl VektConfig {
         Ok(config)
     }
 
-    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save(&self) -> Result<()> {
         let dir = std::env::current_dir()?.join(".vekt");
         ensure_vekt_dir(&dir)?;
         let file = File::create(dir.join("config.json"))?;

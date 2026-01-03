@@ -18,6 +18,9 @@ pub fn ensure_vekt_dir(vekt_path: &Path) -> io::Result<()> {
 /// Locates the root .vekt directory by traversing up from the current directory.
 /// Returns the path containing .vekt (e.g., /path/to/repo).
 pub fn find_vekt_root() -> Option<PathBuf> {
+    if let Ok(root) = std::env::var("VEKT_ROOT") {
+        return Some(PathBuf::from(root));
+    }
     let mut current = std::env::current_dir().ok()?;
     loop {
         let vekt_path = current.join(".vekt");

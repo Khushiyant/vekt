@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -59,147 +58,6 @@ enum RemoteCommand {
     Remove { name: String },
 }
 
-fn scan_manifests(dir: &std::path::Path, hashes: &mut HashSet<String>) -> std::io::Result<()> {
-    if dir.is_dir() {
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                let name = path.file_name().unwrap_or_default().to_string_lossy();
-                // Ignore common build/hidden dirs to avoid scanning too much or loops
-                if name == ".git" || name == ".vekt" || name == "target" || name == "node_modules" {
-                    continue;
-                }
-                scan_manifests(&path, hashes)?;
-            } else if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && name.ends_with(".vekt.json")
-            {
-                let f = File::open(&path)?;
-                let reader = std::io::BufReader::new(f);
-                if let Ok(manifest) =
-                    serde_json::from_reader::<_, vekt_core::storage::VektManifest>(reader)
-                {
-                    for tensor in manifest.tensors.values() {
-                        hashes.insert(tensor.hash.clone());
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-fn scan_git_history(
-    repo_root: &std::path::Path,
-    hashes: &mut HashSet<String>,
-) -> std::io::Result<()> {
-    // Check if this is a git repository
-    let git_dir = repo_root.join(".git");
-    if !git_dir.exists() {
-        return Ok(());
-    }
-
-    // Use git rev-list to get ALL objects in the entire history (not just branch tips)
-    let rev_list_output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo_root)
-        .arg("rev-list")
-        .arg("--all")
-        .arg("--objects")
-        .output();
-
-    if let Ok(output) = rev_list_output {
-        if !output.status.success() {
-            return Ok(());
-        }
-
-        let objects = String::from_utf8_lossy(&output.stdout);
-
-        // Collect all object SHAs that are .vekt.json files
-        let mut manifest_objects = Vec::new();
-        for line in objects.lines() {
-            // Format: "<sha> <path>" or just "<sha>" for commits
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() == 2 {
-                let (sha, path) = (parts[0], parts[1]);
-                if path.ends_with(".vekt.json") {
-                    manifest_objects.push(sha.to_string());
-                }
-            }
-        }
-
-        if manifest_objects.is_empty() {
-            return Ok(());
-        }
-
-        // Use git cat-file --batch for efficient streaming of multiple objects
-        let mut cat_file = std::process::Command::new("git")
-            .arg("-C")
-            .arg(repo_root)
-            .arg("cat-file")
-            .arg("--batch")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .spawn()?;
-
-        // Write all SHAs to stdin
-        if let Some(mut stdin) = cat_file.stdin.take() {
-            use std::io::Write;
-            for sha in &manifest_objects {
-                writeln!(stdin, "{}", sha)?;
-            }
-            // Close stdin to signal we're done
-            drop(stdin);
-        }
-
-        // Read the batched output
-        if let Some(stdout) = cat_file.stdout.take() {
-            use std::io::{BufRead, Read};
-            let mut reader = std::io::BufReader::new(stdout);
-
-            loop {
-                // Read header line: "<sha> <type> <size>"
-                let mut header_line = String::new();
-                let bytes_read = reader.read_line(&mut header_line)?;
-                if bytes_read == 0 {
-                    break; // EOF
-                }
-
-                let parts: Vec<&str> = header_line.split_whitespace().collect();
-                if parts.len() != 3 {
-                    continue;
-                }
-
-                let size: usize = match parts[2].parse() {
-                    Ok(s) => s,
-                    Err(_) => continue,
-                };
-
-                // Read exactly 'size' bytes (the actual file content)
-                let mut content = vec![0u8; size];
-                reader.read_exact(&mut content)?;
-
-                // Read the trailing newline that git cat-file adds after each object
-                let mut newline = [0u8; 1];
-                reader.read_exact(&mut newline)?;
-
-                // Try to parse as manifest
-                if let Ok(manifest) =
-                    serde_json::from_slice::<vekt_core::storage::VektManifest>(&content)
-                {
-                    for tensor in manifest.tensors.values() {
-                        hashes.insert(tensor.hash.clone());
-                    }
-                }
-            }
-        }
-
-        cat_file.wait()?;
-    }
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -221,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "vekt repository already exists in {}",
                     current_dir.display()
                 );
-                return Ok(());
+                return Ok(())
             }
 
             std::fs::create_dir_all(&vekt_dir)?;
@@ -272,9 +130,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let old_file = File::open(old)?;
             let new_file = File::open(new)?;
 
-            let old_manifest: vekt_core::storage::VektManifest =
+            let old_manifest: vekt_core::storage::VektManifest = 
                 serde_json::from_reader(std::io::BufReader::new(old_file))?;
-            let new_manifest: vekt_core::storage::VektManifest =
+            let new_manifest: vekt_core::storage::VektManifest = 
                 serde_json::from_reader(std::io::BufReader::new(new_file))?;
 
             old_manifest.print_diff(&new_manifest);
@@ -283,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Restore { path, layers } => {
             let file = File::open(path).expect("Failed to open manifest file");
             let reader = std::io::BufReader::new(file);
-            let manifest: vekt_core::storage::VektManifest =
+            let manifest: vekt_core::storage::VektManifest = 
                 serde_json::from_reader(reader).expect("Failed to parse manifest JSON");
 
             let output_path = if let Some(file_name) = path.file_name() {
@@ -307,6 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Pull { remote } => {
+            let _lock = LockFile::lock()?;
             let config = vekt_core::storage::VektConfig::load()?;
             if let Some(url) = config.remotes.get(remote) {
                 println!("Pulling from remote '{}' at URL '{}'", remote, url);
@@ -338,6 +197,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Push { remote } => {
+            let _lock = LockFile::lock()?;
             let config = vekt_core::storage::VektConfig::load()?;
             if let Some(url) = config.remotes.get(remote) {
                 println!("Pushing to remote '{}' at URL '{}'", remote, url);
@@ -356,7 +216,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Load manifest
                         let f = File::open(&path)?;
                         let reader = std::io::BufReader::new(f);
-                        let manifest: vekt_core::storage::VektManifest =
+                        let manifest: vekt_core::storage::VektManifest = 
                             serde_json::from_reader(reader)?;
 
                         match client.push(&manifest, name).await {
@@ -379,64 +239,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Gc => {
+            let _lock = LockFile::lock()?;
             println!(
                 "Running Garbage Collection on {}...",
                 get_store_path().display()
             );
-            let store_path = get_store_path();
-            if !store_path.exists() {
-                println!("Store path does not exist.");
-                return Ok(());
+            
+            let root = find_vekt_root().unwrap_or_else(|| PathBuf::from("."));
+            match vekt_core::gc::run_gc(&root) {
+                Ok(stats) => {
+                    println!(
+                        "GC Complete. Deleted: {}, Kept: {}",
+                        stats.deleted,
+                        stats.kept
+                    );
+                },
+                Err(e) => eprintln!("GC Failed: {}", e),
             }
-
-            // 1. Collect all referenced hashes
-            let mut referenced_hashes = HashSet::new();
-
-            // Find root to scan from
-            let scan_root = find_vekt_root().unwrap_or_else(|| PathBuf::from("."));
-            println!(
-                "Scanning for manifests starting from: {}",
-                scan_root.display()
-            );
-
-            // Scan current working tree
-            scan_manifests(&scan_root, &mut referenced_hashes)?;
-
-            // Scan git history (all branches and commits)
-            println!("Scanning Git history for manifests...");
-            scan_git_history(&scan_root, &mut referenced_hashes)?;
-
-            println!(
-                "Found {} referenced blobs (including all Git branches).",
-                referenced_hashes.len()
-            );
-
-            // 2. Scan blobs and delete unreferenced
-            let mut deleted_count = 0;
-            let mut kept_count = 0;
-            let blob_paths = std::fs::read_dir(&store_path)?;
-
-            for entry in blob_paths {
-                let entry = entry?;
-                let path = entry.path();
-                if let Some(hash) = path.file_name().and_then(|n| n.to_str()) {
-                    if !referenced_hashes.contains(hash) {
-                        // Delete
-                        if let Err(e) = std::fs::remove_file(&path) {
-                            eprintln!("Failed to delete blob {}: {}", hash, e);
-                        } else {
-                            deleted_count += 1;
-                        }
-                    } else {
-                        kept_count += 1;
-                    }
-                }
-            }
-
-            println!(
-                "GC Complete. Deleted: {}, Kept: {}",
-                deleted_count, kept_count
-            );
         }
 
         // Remote management commands
